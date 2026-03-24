@@ -9,6 +9,7 @@ export class OrdersService {
   constructor(private kafkaService: KafkaService) {}
 
   async createOrder(data: any) {
+    console.log("🔄 Creating order with data:", data);
     const order = {
       id: uuidv4(),
       status: "CREATED",
@@ -16,9 +17,15 @@ export class OrdersService {
     };
 
     this.orders.push(order);
+    console.log("💾 Order stored in memory:", order);
 
     // publish event
-    await this.kafkaService.sendEvent("order.created", order);
+    try {
+      await this.kafkaService.sendEvent("order.created", order);
+      console.log("🚀 Event published to Kafka topic 'order.created'");
+    } catch (error) {
+      console.error("❌ Failed to publish event:", error);
+    }
 
     return order;
   }
