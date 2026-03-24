@@ -66,11 +66,10 @@ services:
   payment-service:
     build: ./services/payment-service
     container_name: payment-service
-    restart: unless-stopped
-    depends_on:
-      - redpanda
     environment:
       KAFKA_BROKER: redpanda:9092
+    depends_on:
+      - redpanda
 
 volumes:
   postgres_data:
