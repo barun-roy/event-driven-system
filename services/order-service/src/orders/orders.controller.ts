@@ -8,9 +8,9 @@ export class OrdersController {
 
   @Post()
   async createOrder(@Body() body: CreateOrderDto) {
-    console.log("📦 POST /orders received:", body);
+    console.log("POST /orders received:", body);
     const result = await this.ordersService.createOrder(body);
-    console.log("✅ Order created:", result);
+    console.log("Order created:", result);
     return result;
   }
 }
