@@ -98,5 +98,14 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: onboarding@resend.dev
 
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - order-service
+    restart: always
+
 volumes:
   postgres_data:
