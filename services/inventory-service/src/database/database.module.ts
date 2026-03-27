@@ -10,6 +10,10 @@ import { TypeOrmModule } from "@nestjs/typeorm";
       username: "postgres",
       password: "password",
       database: process.env.DB_NAME || "event_driven_system",
+      // autoLoadEntities can miss entities depending on module import order
+      // in Nest. Provide an explicit entities glob so tables are created
+      // reliably during app bootstrap.
+      entities: [__dirname + "/../**/*.entity{.ts,.js}"],
       autoLoadEntities: true,
       synchronize: true,
     }),

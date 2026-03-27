@@ -13,8 +13,8 @@ interface PaymentEvent {
 
 interface InventoryEvent {
   orderId: string;
-  productId: string;
-  quantity: number;
+  productId?: string;
+  quantity?: number;
 }
 
 @Injectable()
@@ -46,6 +46,8 @@ export class OrderEventsConsumer implements OnModuleInit {
     await this.consumer.subscribe({ topic: "payment.success" });
     await this.consumer.subscribe({ topic: "payment.failed" });
     await this.consumer.subscribe({ topic: "inventory.updated" });
+    await this.consumer.subscribe({ topic: "inventory.failed" });
+    await this.consumer.subscribe({ topic: "payment.refunded" });
 
     this.logger.log("Listening to order-related events...");
 
@@ -69,6 +71,14 @@ export class OrderEventsConsumer implements OnModuleInit {
           if (topic === "inventory.updated") {
             const inventoryData: InventoryEvent = JSON.parse(raw);
             await this.handleInventoryUpdated(inventoryData);
+          }
+          if (topic === "inventory.failed") {
+            const inventoryData: InventoryEvent = JSON.parse(raw);
+            await this.handleInventoryFailed(inventoryData);
+          }
+          if (topic === "payment.refunded") {
+            const inventoryData: InventoryEvent = JSON.parse(raw);
+            await this.handlePaymentRefunded(inventoryData);
           }
         } catch (error) {
           this.logger.error("Failed to process event", error);
@@ -109,7 +119,7 @@ export class OrderEventsConsumer implements OnModuleInit {
   }
 
   async handleInventoryUpdated(data: InventoryEvent) {
-    const eventId = `${data.orderId}-inventory-updated`;
+    const eventId = `${data.orderId}-INVENTORY_UPDATED`;
 
     const exists = await this.processedRepo.findOne({
       where: { eventId },
@@ -124,7 +134,10 @@ export class OrderEventsConsumer implements OnModuleInit {
       where: { id: data.orderId },
     });
 
-    if (!order) return;
+    if (!order) {
+      this.logger.warn(`Order ${data.orderId} not found`);
+      return;
+    }
 
     if (order.status !== "PAYMENT_COMPLETED") {
       this.logger.warn(`Order not ready for completion`);
@@ -143,5 +156,52 @@ export class OrderEventsConsumer implements OnModuleInit {
     });
 
     this.logger.log(`Order confirmed: ${data.orderId}`);
+  }
+
+  async handleInventoryFailed(data: InventoryEvent) {
+    this.logger.error(`Inventory failed for ${data.orderId}`);
+    const eventId = `${data.orderId}-INVENTORY_FAILED`;
+
+    const exists = await this.processedRepo.findOne({
+      where: { eventId },
+    });
+
+    if (exists) {
+      this.logger.warn(`Duplicate inventory event skipped: ${eventId}`);
+      return;
+    }
+
+    // mark processed BEFORE emitting (important)
+    await this.processedRepo.save({ eventId });
+
+    await this.kafkaService.sendEvent("payment.refund", {
+      orderId: data.orderId,
+    });
+  }
+
+  async handlePaymentRefunded(data: { orderId: string }) {
+    const eventId = `${data.orderId}-PAYMENT_REFUNDED`;
+
+    const exists = await this.processedRepo.findOne({
+      where: { eventId },
+    });
+
+    if (exists) {
+      this.logger.warn(`Duplicate payment refund event skipped ${eventId}`);
+      return;
+    }
+
+    await this.orderRepo.update(data.orderId, {
+      status: "FAILED",
+    });
+
+    // mark processed BEFORE emitting (important)
+    await this.processedRepo.save({ eventId });
+
+    await this.kafkaService.sendEvent("order.cancelled", {
+      orderId: data.orderId,
+    });
+
+    this.logger.log(`Order cancelled: ${data.orderId}`);
   }
 }

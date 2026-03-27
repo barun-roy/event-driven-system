@@ -2,10 +2,9 @@ import { Injectable, OnModuleInit, Logger } from "@nestjs/common";
 import { Kafka } from "kafkajs";
 import { EmailService } from "./email.service";
 
-interface PaymentEvent {
+type NotificationEvent = {
   orderId: string;
-  status: "SUCCESS" | "FAILED";
-}
+};
 
 @Injectable()
 export class NotificationConsumer implements OnModuleInit {
@@ -28,13 +27,14 @@ export class NotificationConsumer implements OnModuleInit {
     await this.consumer.subscribe({ topic: "payment.success" });
     await this.consumer.subscribe({ topic: "payment.failed" });
     await this.consumer.subscribe({ topic: "order.confirmed" });
+    await this.consumer.subscribe({ topic: "order.cancelled" });
 
     this.logger.log("Listening to payment events from notification service");
 
     await this.consumer.run({
       eachMessage: async ({ topic, message }) => {
         const raw = message.value?.toString() || "{}";
-        const data: PaymentEvent = JSON.parse(raw);
+        const data: NotificationEvent = JSON.parse(raw);
 
         if (topic === "payment.success") {
           await this.emailService.sendEmail(
@@ -57,6 +57,14 @@ export class NotificationConsumer implements OnModuleInit {
             "boron.roy@gmail.com",
             "Order Confirmed",
             `Your order ${data.orderId} is confirmed!`,
+          );
+        }
+
+        if (topic === "order.cancelled") {
+          await this.emailService.sendEmail(
+            "boron.roy@gmail.com",
+            "Order Cancelled",
+            `Order ${data.orderId} was cancelled and refunded`,
           );
         }
       },

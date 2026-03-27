@@ -33,18 +33,31 @@ export class PaymentConsumer implements OnModuleInit {
       topic: "order.created",
       fromBeginning: true,
     });
+    await consumer.subscribe({ topic: "payment.refund" });
 
     this.logger.log("Listening to topic: order.created");
 
     await consumer.run({
-      eachMessage: async ({ message }) => {
+      eachMessage: async ({ topic, message }) => {
         try {
           const raw = message.value?.toString() || "{}";
           const data: OrderCreatedEvent = JSON.parse(raw);
 
           this.logger.log(`Received order event: ${raw}`);
 
-          await this.handleWithRetry(data);
+          if (topic === "payment.refund") {
+            const refundData = JSON.parse(raw);
+
+            this.logger.log(`Refunding payment for ${refundData.orderId}`);
+
+            await new Promise((res) => setTimeout(res, 1000));
+
+            await this.kafkaService.sendEvent("payment.refunded", {
+              orderId: refundData.orderId,
+            });
+          } else {
+            await this.handleWithRetry(data);
+          }
         } catch (error) {
           this.logger.error("Failed to process message", error);
         }

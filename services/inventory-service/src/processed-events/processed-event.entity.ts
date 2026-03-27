@@ -1,6 +1,6 @@
 import { Entity, PrimaryColumn, CreateDateColumn } from "typeorm";
 
-@Entity("order_processed_events")
+@Entity("inventory_processed_events")
 export class ProcessedEvent {
   @PrimaryColumn()
   eventId!: string;
